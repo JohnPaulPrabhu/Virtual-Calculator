@@ -6,7 +6,7 @@ import google.generativeai as genai
 from mediapipe.python.solutions import hands, drawing_utils
 from dotenv import load_dotenv
 import streamlit as st
-
+import sys # Need to remove
 
 class Calculator:
     def __init__(self):
@@ -46,24 +46,22 @@ class Calculator:
         
         self.imgRGB = cv2.cvtColor(self.img, cv2.COLOR_BGR2RGB)
         
-        return self.imgRGB
+        # return self.img
         
     def process_hands(self):
         result = self.mphands.process(image=self.imgRGB)
-        print(result.multi_hand_landmarks)
-        
         # Draw the landmarks and connects on the image
         self.landmark_list = []
         if result.multi_hand_landmarks:
             for hand_landmark in result.multi_hand_landmarks:
-                drawing_utils.draw_landmarks(self.img, hand_landmark, connections=hands.HAND_CONNECTIONS)
+                # drawing_utils.draw_landmarks(self.img, hand_landmark, connections=hands.HAND_CONNECTIONS) # Not necessary unless need to show the landmark connections
                 
                 # Extract ID and Origin for Each Landmarks
                 for idx, lm in enumerate(hand_landmark.landmark):
                     h, w, c = self.img.shape
                     x, y = lm.x, lm.y
                     cx, cy = int(x*w), int(y*h)
-                    self.landmark_list.append([id, cx, cy])
+                    self.landmark_list.append([idx, cx, cy])
     
     
     def identify_fingers(self):
@@ -72,13 +70,13 @@ class Calculator:
         
         if self.landmark_list:
             for id in [4,8,12,16,20]:
+                # Checknig if tip of the finger height is higher than middle of the finger
                 # other than thumb finger
                 if id != 4 and self.landmark_list[id][2] < self.landmark_list[id-2][2]:
                     self.fingers.append(1)
-                    
-                elif self.landmark_list[id][1] < self.landmark_list[id-2][1]:
+                # Checking thumb finger
+                elif id == 4 and self.landmark_list[id][1] < self.landmark_list[id-2][1]:
                     self.fingers.append(1)
-                
                 else:
                     self.fingers.append(0)
                     
@@ -86,10 +84,35 @@ class Calculator:
             for i in range(5):
                 if self.fingers[i] == 1:
                     cx, cy = self.landmark_list[(i+1)*4][1:]
-                    cv2.circle(self.imgRGB, center=(cx, cy), radius=5, color=(255,0,255), thickness=1)
+                    cv2.circle(self.img, center=(cx, cy), radius=5, color=(255,0,255), thickness=1)
                     
     
+    def handle_drawing_mode(self):
+        # Thumb and index fingers are up --> Drawing mode
+        if sum(self.fingers) == 2 and self.fingers[0] == self.fingers[1] == 1:
+            cx, cy = self.landmark_list[8][1], self.landmark_list[8][2]
+            print(cx, cy)
+            if self.p1 == self.p2 == 0:
+                self.p1, self.p2 = cx, cy
+            cv2.line(self.canvas, pt1=(self.p1, self.p2), pt2=(cx, cy), color=(255,0,255), thickness=5)
+            self.p1, self.p2 = cx, cy
         
+        # Thumb, index, and middle finger --> Disable drawing mode
+        elif sum(self.fingers) == 3 and self.fingers[0] == self.fingers[1] == self.fingers[2] == 1:
+            self.p1, self.p2 = 0, 0
+        
+        # Thumb and middle finger --> Erase mode
+        elif sum(self.fingers) == 2 and self.fingers[0] == self.fingers[2] == 1:
+            cx, cy = self.landmark_list[8][2], self.landmark_list[8][2]
+            if self.p1 ==self.p2 == 0:
+                self.p1, self.p2 = cx, cy
+            cv2.line(self.canvas, pt1=(self.p1, self.p2), pt2=(cx, cy), color=(0,0,0), thickness=50)
+            self.p1, self.p2 = cx, cy
+        # Thumb and pinky --> Reset the canvas
+        elif sum(self.fingers)==2 and self.fingers[0]==self.fingers[4] == 1:
+            self.canvas=np.zeros(shape=(550,950,3), dtype=np.uint8)
+    
+    
     def release_cap(self):
         self.cap.release()
         
@@ -98,10 +121,13 @@ def main():
     c = Calculator()
     
     while True:
-        frame = c.process_frame()
+        c.process_frame()
         c.process_hands()
         c.identify_fingers()
-        cv2.imshow('Frame', frame)
+        # frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        
+        c.handle_drawing_mode()
+        cv2.imshow('Frame', c.img)
         if cv2.waitKey(25) & 0xFF == ord('q'):
             break
     c.release_cap()
