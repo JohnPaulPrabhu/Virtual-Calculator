@@ -45,8 +45,7 @@ class Calculator:
         self.img = cv2.flip(img, flipCode=1)
         
         self.imgRGB = cv2.cvtColor(self.img, cv2.COLOR_BGR2RGB)
-        
-        # return self.img
+
         
     def process_hands(self):
         result = self.mphands.process(image=self.imgRGB)
@@ -89,21 +88,21 @@ class Calculator:
     
     def handle_drawing_mode(self):
         # Thumb and index fingers are up --> Drawing mode
-        if sum(self.fingers) == 2 and self.fingers[0] == self.fingers[1] == 1:
+        if sum(self.fingers) == 1 and self.fingers[1] == 1:
             cx, cy = self.landmark_list[8][1], self.landmark_list[8][2]
             print(cx, cy)
             if self.p1 == self.p2 == 0:
                 self.p1, self.p2 = cx, cy
-            cv2.line(self.canvas, pt1=(self.p1, self.p2), pt2=(cx, cy), color=(255,0,255), thickness=5)
+            cv2.line(self.canvas, pt1=(self.p1, self.p2), pt2=(cx, cy), color=(0, 0, 255), thickness=5)
             self.p1, self.p2 = cx, cy
         
         # Thumb, index, and middle finger --> Disable drawing mode
-        elif sum(self.fingers) == 3 and self.fingers[0] == self.fingers[1] == self.fingers[2] == 1:
+        elif sum(self.fingers) == 3 and self.fingers[3] == self.fingers[1] == self.fingers[2] == 1:
             self.p1, self.p2 = 0, 0
         
         # Thumb and middle finger --> Erase mode
-        elif sum(self.fingers) == 2 and self.fingers[0] == self.fingers[2] == 1:
-            cx, cy = self.landmark_list[8][2], self.landmark_list[8][2]
+        elif sum(self.fingers) == 2 and self.fingers[1] == self.fingers[2] == 1:
+            cx, cy = self.landmark_list[12][1], self.landmark_list[12][2]
             if self.p1 ==self.p2 == 0:
                 self.p1, self.p2 = cx, cy
             cv2.line(self.canvas, pt1=(self.p1, self.p2), pt2=(cx, cy), color=(0,0,0), thickness=50)
@@ -112,7 +111,16 @@ class Calculator:
         elif sum(self.fingers)==2 and self.fingers[0]==self.fingers[4] == 1:
             self.canvas=np.zeros(shape=(550,950,3), dtype=np.uint8)
     
-    
+    def blend_feed_with_canvas(self):
+        # self.img = cv2.addWeighted(self.img, alpha=0.8, src2=self.canvas, beta=1, gamma=0)
+        img = cv2.addWeighted(src1=self.img, alpha=0.7, src2=self.canvas, beta=1, gamma=0)
+        imgGray = cv2.cvtColor(self.canvas, cv2.COLOR_BGR2GRAY)
+        _, thresh = cv2.threshold(imgGray, 50, 255, cv2.THRESH_BINARY_INV)  
+        imgRev = cv2.cvtColor(thresh, cv2. COLOR_GRAY2BGR)
+        img = cv2.bitwise_and(img, imgRev)
+        self.img = cv2.bitwise_or(img, self.canvas)
+
+
     def release_cap(self):
         self.cap.release()
         
@@ -127,6 +135,7 @@ def main():
         # frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         
         c.handle_drawing_mode()
+        c.blend_feed_with_canvas()
         cv2.imshow('Frame', c.img)
         if cv2.waitKey(25) & 0xFF == ord('q'):
             break
