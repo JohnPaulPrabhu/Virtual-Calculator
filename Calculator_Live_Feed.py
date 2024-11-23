@@ -280,8 +280,8 @@ class Calculator:
         c.release_cap()
         cv2.destroyAllWindows()
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()
     
     
     
